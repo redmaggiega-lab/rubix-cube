@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cube Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg:#e7edfc; --mat:#d2dcf7; --dot:#bccaf0; --ink:#14215a; --soft:#4b5992;
+  --btn:#ffffff; --btn-press:#eef2ff; --line:#b4c2ea; --accent:#ffb020; --accent-ink:#14215a;
+  --good:#16834a; --banner:#ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1a45; --mat:#16245d; --dot:#22347a; --ink:#eef2ff; --soft:#a9b6e6;
+    --btn:#1e2f76; --btn-press:#273b8c; --line:#30449a; --accent:#ffb020; --accent-ink:#14215a;
+    --good:#4ade80; --banner:#1e2f76;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Fredoka',system-ui,sans-serif; background:var(--bg); color:var(--ink);
+  display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+header{display:flex; align-items:flex-end; justify-content:space-between; padding:14px 18px 8px; gap:12px}
+h1{font-size:1.7rem; font-weight:700; letter-spacing:-0.01em; line-height:1}
+h1 span{display:block; font-size:.85rem; font-weight:400; color:var(--soft); margin-top:4px}
+.stats{display:flex; gap:16px; text-align:right}
+.stat b{display:block; font-size:1.35rem; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.1}
+.stat small{font-size:.78rem; color:var(--soft)}
+#stage{
+  position:relative; flex:1; min-height:0; margin:0 12px; border-radius:22px;
+  background-color:var(--mat);
+  background-image:radial-gradient(var(--dot) 1.5px, transparent 1.6px);
+  background-size:22px 22px;
+  touch-action:none; cursor:grab; overflow:hidden;
+}
+#stage canvas{display:block; width:100%; height:100%}
+#hint{position:absolute; left:0; right:0; bottom:10px; text-align:center; font-size:.85rem; color:var(--soft); pointer-events:none; transition:opacity .3s}
+#banner{
+  position:absolute; left:50%; top:16px; transform:translate(-50%,-8px); opacity:0;
+  background:var(--banner); color:var(--ink); border:2px solid var(--good);
+  padding:10px 18px; border-radius:14px; font-weight:600; text-align:center;
+  transition:opacity .25s, transform .25s; pointer-events:none; white-space:nowrap; z-index:3;
+}
+#banner.show{opacity:1; transform:translate(-50%,0)}
+#banner small{display:block; font-weight:400; color:var(--soft); font-size:.8rem}
+#picker{
+  position:absolute; z-index:2; display:flex; flex-direction:column; gap:6px;
+  background:var(--banner); border:2px solid var(--accent); border-radius:16px; padding:8px;
+  box-shadow:0 6px 18px rgba(20,33,90,.25);
+}
+#picker[hidden]{display:none}
+#picker .ptitle{font-size:.85rem; font-weight:600; text-align:center; display:flex; align-items:center; justify-content:center; gap:6px}
+#picker .dot{width:12px; height:12px; border-radius:50%; border:1.5px solid var(--line)}
+#picker .row{display:flex; gap:6px}
+#picker .row button{width:72px; height:62px; font-size:1.7rem; line-height:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
+#picker .row small{font-size:.7rem; font-weight:500; color:var(--soft)}
+.controls{padding:10px 12px 12px; display:flex; flex-direction:column; gap:8px}
+#guide{font-size:.95rem; font-weight:500; padding:0 4px; min-height:1.4em; line-height:1.35}
+#guide .sw{display:inline-block; width:.8em; height:.8em; border-radius:3px; vertical-align:-1px; border:1.5px solid var(--line); margin-right:2px}
+button{
+  font-family:inherit; color:var(--ink); background:var(--btn);
+  border:1.5px solid var(--line); border-radius:12px; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; user-select:none;
+}
+button:active{background:var(--btn-press); transform:translateY(1px)}
+button:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:default}
+.actions{display:grid; grid-template-columns:repeat(5,1fr); gap:6px}
+.act{height:48px; font-size:.92rem; font-weight:500; padding:0 2px}
+.act.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+details{font-size:.85rem; color:var(--soft)}
+summary{cursor:pointer; padding:2px 4px; width:max-content}
+.moves{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:8px}
+.mv{height:42px; font-size:1.05rem; font-weight:600; border-bottom:5px solid var(--face)}
+.help{font-size:.8rem; color:var(--soft); line-height:1.45; margin-top:6px}
+@media (min-width:760px){ body{max-width:720px; margin:0 auto} }
+@media (prefers-reduced-motion: reduce){ #banner,#hint{transition:none} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cube Lab<span>Tap a side to turn it</span></h1>
+  <div class="stats">
+    <div class="stat"><b id="time">0:00.00</b><small>Time</small></div>
+    <div class="stat"><b id="moves">0</b><small>Moves</small></div>
+    <div class="stat"><b id="best">–</b><small>Best</small></div>
+  </div>
+</header>
+
+<div id="stage">
+  <div id="banner"></div>
+  <div id="picker" hidden>
+    <div class="ptitle"><span class="dot" id="pdot"></span><span id="pname">Side</span></div>
+    <div class="row">
+      <button id="pcw" aria-label="Turn clockwise">↻<small>Clockwise</small></button>
+      <button id="pccw" aria-label="Turn counterclockwise">↺<small>Other way</small></button>
+    </div>
+  </div>
+  <div id="hint">Drag to look around. Tap a side to turn it.</div>
+</div>
+
+<div class="controls">
+  <div id="guide">Press Scramble to mix it up, then try to solve it.</div>
+  <div class="actions">
+    <button class="act primary" id="btnScramble">Scramble</button>
+    <button class="act" id="btnHint">Hint</button>
+    <button class="act" id="btnUndo">Undo</button>
+    <button class="act" id="btnSolve">Solve it</button>
+    <button class="act" id="btnReset">Reset</button>
+  </div>
+  <details>
+    <summary>Letter buttons for pros</summary>
+    <div class="moves" id="moveGrid"></div>
+    <p class="help">Each letter turns a side clockwise as if you're looking straight at it, and ' turns it the other way. White is on top and green faces you. On a keyboard, press the letter, or Shift + letter for the other way.</p>
+  </details>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- Scene ----------
+  const stage = $('stage');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  scene.add(camera);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55);
+  sun.position.set(5, 9, 6);
+  scene.add(sun);
+  camera.add(new THREE.PointLight(0xffffff, 0.35));
+
+  // ---------- Cube pieces ----------
+  const FACE_COLORS = { U: 0xffffff, D: 0xffd500, F: 0x009b48, B: 0x0046ad, R: 0xc41e3a, L: 0xff6a13 };
+  const FACE_NAMES = { U: 'white', D: 'yellow', F: 'green', B: 'blue', R: 'red', L: 'orange' };
+  const FACE_NORMALS = { R: [1,0,0], L: [-1,0,0], U: [0,1,0], D: [0,-1,0], F: [0,0,1], B: [0,0,-1] };
+  const FACE_BY_NORMAL = {};
+  for (const k in FACE_NORMALS) FACE_BY_NORMAL[FACE_NORMALS[k].join(',')] = k;
+  const toCss = n => '#' + n.toString(16).padStart(6, '0');
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1b1d2b, roughness: 0.55 });
+  const bodyGeo = new THREE.BoxGeometry(0.97, 0.97, 0.97);
+  const stickerMats = {};
+  for (const k in FACE_COLORS) stickerMats[k] = new THREE.MeshStandardMaterial({ color: FACE_COLORS[k], roughness: 0.32 });
+
+  function roundedSquare(size, r) {
+    const h = size / 2, s = new THREE.Shape();
+    s.moveTo(-h + r, -h); s.lineTo(h - r, -h); s.quadraticCurveTo(h, -h, h, -h + r);
+    s.lineTo(h, h - r); s.quadraticCurveTo(h, h, h - r, h);
+    s.lineTo(-h + r, h); s.quadraticCurveTo(-h, h, -h, h - r);
+    s.lineTo(-h, -h + r); s.quadraticCurveTo(-h, -h, -h + r, -h);
+    return new THREE.ShapeGeometry(s, 5);
+  }
+  const stickerGeo = roundedSquare(0.84, 0.13);
+
+  const cubeGroup = new THREE.Group();
+  scene.add(cubeGroup);
+  let cubies = [];
+
+  function buildCube() {
+    while (cubeGroup.children.length) cubeGroup.remove(cubeGroup.children[0]);
+    cubies = [];
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+      if (!x && !y && !z) continue;
+      const c = new THREE.Group();
+      c.position.set(x, y, z);
+      c.add(new THREE.Mesh(bodyGeo, bodyMat));
+      for (const k in FACE_NORMALS) {
+        const [nx, ny, nz] = FACE_NORMALS[k];
+        if ((nx && nx === x) || (ny && ny === y) || (nz && nz === z)) {
+          const s = new THREE.Mesh(stickerGeo, stickerMats[k]);
+          const nv = new THREE.Vector3(nx, ny, nz);
+          s.position.copy(nv).multiplyScalar(0.487);
+          s.lookAt(nv.clone().multiplyScalar(2));
+          s.userData = { color: k, normal: nv };
+          c.add(s);
+        }
+      }
+      cubeGroup.add(c);
+      cubies.push(c);
+    }
+  }
+
+  // ---------- Highlight and arrows ----------
+  const Z = new THREE.Vector3(0, 0, 1);
+  const highlight = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.05, 3.05),
+    new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.3, depthWrite: false })
+  );
+  highlight.visible = false;
+  scene.add(highlight);
+
+  // Curved arrow: counterclockwise when seen from +z. Mirror on x for clockwise.
+  const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, side: THREE.DoubleSide });
+  const hintArrow = new THREE.Group();
+  const arrowInner = new THREE.Group();
+  const R = 1.05;
+  arrowInner.add(new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 10, 60, Math.PI * 1.45), arrowMat));
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.45, 20), arrowMat);
+  const endA = Math.PI * 1.45;
+  head.position.set(R * Math.cos(endA), R * Math.sin(endA), 0);
+  head.rotation.z = endA; // cone points +y; rotate to the counterclockwise tangent
+  arrowInner.add(head);
+  // a fat invisible disc so the arrow is easy to tap
+  const hitDisc = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), new THREE.MeshBasicMaterial({ visible: false }));
+  arrowInner.add(hitDisc);
+  hintArrow.add(arrowInner);
+  hintArrow.visible = false;
+  scene.add(hintArrow);
+
+  function orientOnFace(obj, face, dist) {
+    const n = new THREE.Vector3(...FACE_NORMALS[face]);
+    obj.quaternion.setFromUnitVectors(Z, n);
+    obj.position.copy(n).multiplyScalar(dist);
+  }
+
+  // ---------- Moves ----------
+  const MOVE_DEF = { R: ['x', 1, -1], L: ['x', -1, 1], U: ['y', 1, -1], D: ['y', -1, 1], F: ['z', 1, -1], B: ['z', -1, 1] };
+  function parseMove(m) {
+    const [axis, layer, dir] = MOVE_DEF[m[0]];
+    const prime = m.includes("'") ? -1 : 1;
+    const turns = m.includes('2') ? 2 : 1;
+    return { axis, layer, angle: dir * prime * turns * Math.PI / 2 };
+  }
+  const inverse = m => m.includes('2') ? m : (m.includes("'") ? m[0] : m[0] + "'");
+
+  const _m = new THREE.Matrix4();
+  function snap(c) {
+    c.position.set(Math.round(c.position.x), Math.round(c.position.y), Math.round(c.position.z));
+    _m.makeRotationFromQuaternion(c.quaternion);
+    const e = _m.elements;
+    for (let i = 0; i < 16; i++) e[i] = Math.round(e[i]);
+    c.quaternion.setFromRotationMatrix(_m);
+  }
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const queue = [];
+  let animating = false;
+
+  function enqueue(move, opts = {}) {
+    queue.push({ move, ...opts });
+    if (!animating) runNext();
+  }
+  function runNext() {
+    if (!queue.length) { animating = false; return; }
+    animating = true;
+    const job = queue.shift();
+    const { axis, layer, angle } = parseMove(job.move);
+    const pivot = new THREE.Group();
+    cubeGroup.add(pivot);
+    const active = cubies.filter(c => Math.round(c.position[axis]) === layer);
+    active.forEach(c => pivot.attach(c));
+    const dur = reduceMotion ? 1 : (job.speed || 220);
+    const t0 = performance.now();
+    function step(now) {
+      const p = Math.min(1, (now - t0) / dur);
+      const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      pivot.rotation[axis] = angle * eased;
+      if (p < 1) { requestAnimationFrame(step); return; }
+      pivot.updateMatrixWorld(true);
+      active.forEach(c => { cubeGroup.attach(c); snap(c); });
+      cubeGroup.remove(pivot);
+      if (job.done) job.done();
+      runNext();
+    }
+    requestAnimationFrame(step);
+  }
+
+  function isSolved() {
+    const seen = {};
+    for (const c of cubies) for (const s of c.children) {
+      if (!s.userData.color) continue;
+      const n = s.userData.normal.clone().applyQuaternion(c.quaternion);
+      const key = Math.round(n.x) + ',' + Math.round(n.y) + ',' + Math.round(n.z);
+      if (seen[key] === undefined) seen[key] = s.userData.color;
+      else if (seen[key] !== s.userData.color) return false;
+    }
+    return true;
+  }
+
+  // ---------- Game state ----------
+  let history = [];
+  let moveCount = 0;
+  let busy = false;
+  let scrambled = false;
+  let timerStart = null, timerEnd = null;
+  let best = null;
+  let hintMove = null;
+  let selectedFace = null;
+
+  const swatch = f => '<span class="sw" style="background:' + toCss(FACE_COLORS[f]) + '"></span>';
+  function setGuide(html) { $('guide').innerHTML = html; }
+
+  function fmt(ms) {
+    const cs = Math.floor(ms / 10);
+    const m = Math.floor(cs / 6000), s = Math.floor(cs / 100) % 60, c = cs % 100;
+    return m + ':' + String(s).padStart(2, '0') + '.' + String(c).padStart(2, '0');
+  }
+  function updateStats() {
+    $('moves').textContent = moveCount;
+    $('best').textContent = best == null ? '–' : fmt(best);
+    $('btnUndo').disabled = busy || !history.length;
+    $('btnSolve').disabled = busy || !history.length;
+    $('btnHint').disabled = busy || !history.length;
+    $('btnScramble').disabled = busy;
+    $('btnReset').disabled = busy;
+    document.querySelectorAll('.mv, #picker button').forEach(b => b.disabled = busy);
+  }
+  function tick() {
+    if (timerStart != null) $('time').textContent = fmt((timerEnd != null ? timerEnd : performance.now()) - timerStart);
+    requestAnimationFrame(tick);
+  }
+
+  let bannerTimer;
+  function showBanner(html, ms = 3500) {
+    const b = $('banner');
+    b.innerHTML = html;
+    b.classList.add('show');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => b.classList.remove('show'), ms);
+  }
+
+  async function loadBest() {
+    try {
+      const r = await window.storage.get('cube-lab-best', false);
+      if (r && r.value) best = JSON.parse(r.value);
+    } catch (e) {}
+    updateStats();
+  }
+  async function saveBest() {
+    try { await window.storage.set('cube-lab-best', JSON.stringify(best), false); } catch (e) {}
+  }
+
+  function clearHint() {
+    hintMove = null;
+    hintArrow.visible = false;
+  }
+
+  function afterUserMove() {
+    moveCount++;
+    updateStats();
+    if (queue.length) return;
+    if (scrambled && isSolved()) {
+      timerEnd = performance.now();
+      const t = timerEnd - timerStart;
+      scrambled = false;
+      history = [];
+      let extra = moveCount + ' moves';
+      if (best == null || t < best) {
+        extra = best == null ? 'Your first solve!' : 'New best time!';
+        best = t;
+        saveBest();
+      }
+      $('time').textContent = fmt(t);
+      closePicker();
+      updateStats();
+      setGuide('You did it! Press Scramble to go again.');
+      showBanner('Solved in ' + fmt(t) + '<small>' + extra + '</small>', 5000);
+    }
+  }
+
+  function userMove(m) {
+    if (busy) return;
+    clearHint();
+    if (scrambled && timerStart == null) { timerStart = performance.now(); timerEnd = null; }
+    history.push(m);
+    if (scrambled) setGuide('Keep going! Stuck? Press Hint.');
+    enqueue(m, { done: afterUserMove });
+  }
+
+  function randomScramble(len = 20) {
+    const faces = 'UDLRFB', axisOf = { U: 'y', D: 'y', L: 'x', R: 'x', F: 'z', B: 'z' };
+    const out = [];
+    let last = '', lastAxis = '', run = 0;
+    while (out.length < len) {
+      const f = faces[Math.floor(Math.random() * 6)];
+      if (f === last) continue;
+      if (axisOf[f] === lastAxis && run >= 2) continue;
+      run = axisOf[f] === lastAxis ? run + 1 : 1;
+      lastAxis = axisOf[f]; last = f;
+      out.push(f + ['', "'", '2'][Math.floor(Math.random() * 3)]);
+    }
+    return out;
+  }
+
+  function scramble() {
+    if (busy) return;
+    busy = true; scrambled = false;
+    clearHint(); closePicker();
+    timerStart = null; timerEnd = null;
+    $('time').textContent = '0:00.00';
+    setGuide('Mixing it up…');
+    const seq = randomScramble();
+    seq.forEach((m, i) => {
+      history.push(m);
+      enqueue(m, {
+        speed: 110,
+        done: i === seq.length - 1 ? () => {
+          busy = false; scrambled = true; moveCount = 0;
+          updateStats();
+          setGuide('Tap a side, then pick an arrow to turn it. The timer starts on your first turn.');
+        } : null
+      });
+    });
+    updateStats();
+  }
+
+  function undo() {
+    if (busy || !history.length) return;
+    clearHint();
+    const m = history.pop();
+    enqueue(inverse(m), { done: () => { moveCount++; updateStats(); } });
+  }
+
+  function hint() {
+    if (busy || !history.length) return;
+    closePicker();
+    hintMove = inverse(history[history.length - 1]);
+    const f = hintMove[0];
+    const twice = hintMove.includes('2');
+    const ccw = hintMove.includes("'");
+    orientOnFace(hintArrow, f, 1.62);
+    arrowInner.scale.x = ccw ? 1 : -1;
+    hintArrow.visible = true;
+    const name = FACE_NAMES[f];
+    const how = twice ? 'twice ↻↻ (either way works)' : (ccw ? 'the other way ↺' : 'clockwise ↻');
+    setGuide('Hint: turn the ' + swatch(f) + ' ' + name + ' side ' + how + '. Tap the yellow arrow to do it.');
+    if (!isFaceVisible(f)) showBanner('Spin the cube to find the ' + name + ' side', 2500);
+  }
+
+  function isFaceVisible(f) {
+    const n = new THREE.Vector3(...FACE_NORMALS[f]);
+    return n.dot(camera.position.clone().normalize()) > 0.15;
+  }
+
+  function autoSolve() {
+    if (busy || !history.length) return;
+    busy = true; scrambled = false;
+    clearHint(); closePicker();
+    timerStart = null; timerEnd = null;
+    $('time').textContent = '0:00.00';
+    const seq = history.slice().reverse().map(inverse);
+    history = [];
+    const speed = seq.length > 40 ? 90 : 150;
+    setGuide('Watch it turn back…');
+    seq.forEach((m, i) => enqueue(m, {
+      speed,
+      done: i === seq.length - 1 ? () => {
+        busy = false; moveCount = 0;
+        updateStats();
+        setGuide('All fixed. Press Scramble to try again.');
+      } : null
+    }));
+    updateStats();
+  }
+
+  function reset() {
+    if (busy) return;
+    queue.length = 0;
+    clearHint(); closePicker();
+    buildCube();
+    history = []; moveCount = 0; scrambled = false;
+    timerStart = null; timerEnd = null;
+    $('time').textContent = '0:00.00';
+    setGuide('Press Scramble to mix it up, then try to solve it.');
+    updateStats();
+  }
+
+  // ---------- Tap a side ----------
+  const picker = $('picker');
+  function openPicker(face, x, y) {
+    selectedFace = face;
+    orientOnFace(highlight, face, 1.505);
+    highlight.visible = true;
+    $('pdot').style.background = toCss(FACE_COLORS[face]);
+    const name = FACE_NAMES[face];
+    $('pname').textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' side';
+    picker.hidden = false;
+    const w = stage.clientWidth, h = stage.clientHeight;
+    const pw = picker.offsetWidth, ph = picker.offsetHeight;
+    let left = Math.max(8, Math.min(w - pw - 8, x - pw / 2));
+    let top = y + 24;
+    if (top + ph > h - 8) top = y - ph - 24;
+    picker.style.left = left + 'px';
+    picker.style.top = Math.max(8, top) + 'px';
+  }
+  function closePicker() {
+    selectedFace = null;
+    picker.hidden = true;
+    highlight.visible = false;
+  }
+  $('pcw').addEventListener('click', () => { if (selectedFace) userMove(selectedFace); });
+  $('pccw').addEventListener('click', () => { if (selectedFace) userMove(selectedFace + "'"); });
+
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  function handleTap(e) {
+    if (busy || animating) return;
+    const r = stage.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    ndc.set((x / r.width) * 2 - 1, -(y / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    if (hintArrow.visible && ray.intersectObject(hintArrow, true).length) {
+      userMove(hintMove);
+      setGuide('Nice! Press Hint again for the next turn.');
+      return;
+    }
+    const hits = ray.intersectObjects(cubies, true);
+    const hit = hits.find(h => h.object.userData.color);
+    if (!hit) { closePicker(); return; }
+    const n = hit.object.userData.normal.clone().applyQuaternion(hit.object.parent.quaternion);
+    const face = FACE_BY_NORMAL[[Math.round(n.x), Math.round(n.y), Math.round(n.z)].join(',')];
+    if (face) openPicker(face, x, y);
+  }
+
+  // ---------- Look-around drag ----------
+  let az = 0.62, el = 0.5, dragging = false, lx = 0, ly = 0, sx = 0, sy = 0, dragged = false;
+  function placeCamera() {
+    const aspect = camera.aspect || 1;
+    const r = 3.3 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.min(1, aspect));
+    camera.position.set(r * Math.cos(el) * Math.sin(az), r * Math.sin(el), r * Math.cos(el) * Math.cos(az));
+    camera.lookAt(0, 0, 0);
+  }
+  stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('#picker')) return;
+    dragging = true; dragged = false;
+    lx = sx = e.clientX; ly = sy = e.clientY;
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lx, dy = e.clientY - ly;
+    lx = e.clientX; ly = e.clientY;
+    if (!dragged && Math.hypot(e.clientX - sx, e.clientY - sy) > 6) {
+      dragged = true;
+      $('hint').style.opacity = 0;
+    }
+    if (!dragged) return;
+    az -= dx * 0.009;
+    el = Math.max(-1.35, Math.min(1.35, el + dy * 0.009));
+    placeCamera();
+  });
+  stage.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    if (!dragged) handleTap(e);
+  });
+  stage.addEventListener('pointercancel', () => { dragging = false; });
+
+  // ---------- Letter buttons & keys ----------
+  const grid = $('moveGrid');
+  ['', "'"].forEach(suffix => {
+    'URFDLB'.split('').forEach(f => {
+      const b = document.createElement('button');
+      b.className = 'mv';
+      b.textContent = f + suffix;
+      b.style.setProperty('--face', toCss(FACE_COLORS[f]));
+      b.setAttribute('aria-label', 'Turn ' + FACE_NAMES[f] + ' side ' + (suffix ? 'counterclockwise' : 'clockwise'));
+      b.addEventListener('click', () => userMove(f + suffix));
+      grid.appendChild(b);
+    });
+  });
+  $('btnScramble').addEventListener('click', scramble);
+  $('btnHint').addEventListener('click', hint);
+  $('btnUndo').addEventListener('click', undo);
+  $('btnSolve').addEventListener('click', autoSolve);
+  $('btnReset').addEventListener('click', reset);
+  window.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toUpperCase();
+    if (k.length === 1 && 'URFDLB'.includes(k)) { e.preventDefault(); userMove(k + (e.shiftKey ? "'" : '')); }
+    else if (k === 'H') hint();
+    else if (k === 'ESCAPE') closePicker();
+  });
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    placeCamera();
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  function render(t) {
+    if (hintArrow.visible) arrowMat.opacity = reduceMotion ? 1 : 0.7 + 0.3 * Math.sin(t / 220);
+    renderer.render(scene, camera);
+    requestAnimationFrame(render);
+  }
+
+  buildCube();
+  resize();
+  updateStats();
+  loadBest();
+  requestAnimationFrame(render);
+  tick();
+})();
+</script>
+</body>
+</html>
